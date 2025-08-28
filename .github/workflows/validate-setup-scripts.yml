@@ -1,0 +1,195 @@
+name: Validate setup scripts (Linux & Windows)
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      enableWindows:
+        description: "Enable Windows validation job for this run"
+        required: false
+        default: 'true'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  decide-windows:
+    name: Decide whether to run Windows validation
+    runs-on: ubuntu-22.04
+    outputs:
+      enabled: ${{ steps.set.outputs.enabled }}
+    steps:
+      - id: set
+        name: Determine enablement from dispatch input or repo variable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_SLUG: ${{ github.repository }}
+          ENABLE_FROM_DISPATCH: ${{ inputs.enableWindows || '' }}
+        run: |
+          set -euo pipefail
+          # Default: enabled unless explicitly disabled
+          enabled="true"
+
+          # If workflow_dispatch input provided, honor true/false explicitly
+          if [ -n "${ENABLE_FROM_DISPATCH:-}" ]; then
+            case "${ENABLE_FROM_DISPATCH,,}" in
+              true)
+                echo "enabled=true" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              false)
+                echo "enabled=false" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+          fi
+
+          owner="${REPO_SLUG%%/*}"
+          repo="${REPO_SLUG#*/}"
+          # Try to read repo actions variable ENABLE_WINDOWS_SETUP_VALIDATION; default to false if missing
+          if gh api -H "Accept: application/vnd.github+json" \
+                "/repos/${owner}/${repo}/actions/variables/ENABLE_WINDOWS_SETUP_VALIDATION" \
+                > var.json 2>/dev/null; then
+            # Parse value using jq if present, else fallback to grep
+            if command -v jq >/dev/null 2>&1; then
+              val=$(jq -r '.value // "false"' < var.json)
+            else
+              val=$(sed -n 's/.*"value"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/p' var.json | head -n1)
+              [ -z "$val" ] && val="false"
+            fi
+            case "${val,,}" in
+              true) enabled="true" ;;
+              false) enabled="false" ;;
+              *) : ;; # keep default enabled
+            esac
+          fi
+          echo "enabled=${enabled}" >> "$GITHUB_OUTPUT"
+
+  validate-linux:
+    name: Validate Linux setup script
+    runs-on: ubuntu-22.04
+    env:
+      # Keep CI fast and less flaky: skip large optional installs (Playwright browsers, some CLIs)
+      SETUP_MINIMAL: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch Remote Scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p scripts
+
+          download() {
+            filename="$1"
+            # Pinned to a known-good commit for determinism
+            sha="c20f87d445bd84ab33e9bc73005fc688fe9f9c8d"
+            url="https://raw.githubusercontent.com/nam20485/agent-instructions/${sha}/scripts/${filename}"
+            if curl -fsSL "$url" -o "scripts/${filename}"; then
+              echo "Fetched $filename at $sha"
+              return 0
+            fi
+            echo "Failed to fetch $filename at $sha" >&2
+            exit 1
+          }
+
+          # overwrite local linux script with remote script
+          download "setup-environment.sh"
+
+      - name: Validate Linux script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! bash -n scripts/setup-environment.sh; then
+            echo "Downloaded scripts/setup-environment.sh has a syntax error (bash -n failed)." >&2
+            echo "Tip: upstream file may contain wrapped lines or unbalanced quotes; fix, then retry." >&2
+            exit 1
+          fi
+
+      - name: Run Linux setup script
+        shell: bash
+        run: |
+          chmod +x scripts/setup-environment.sh
+          # Run with trace, capture logs, and preserve exit code from the script
+          bash -x scripts/setup-environment.sh 2>&1 | tee setup-linux.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload setup log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-linux-log
+          path: setup-linux.log
+
+  validate-windows:
+    needs: decide-windows
+    if: ${{ needs.decide-windows.outputs.enabled == 'true' }}
+    name: Validate Windows setup script
+    runs-on: windows-2022
+    env:
+      SETUP_MINIMAL: '1'
+      NODE_VERSION_PIN: '22.11.0'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch Remote Scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p scripts
+
+          download() {
+            filename="$1"
+            # Pinned to a known-good commit for determinism
+            sha="c20f87d445bd84ab33e9bc73005fc688fe9f9c8d"
+            url="https://raw.githubusercontent.com/nam20485/agent-instructions/${sha}/scripts/${filename}"
+            if curl -fsSL "$url" -o "scripts/${filename}"; then
+              echo "Fetched $filename at $sha"
+              return 0
+            fi
+            echo "Failed to fetch $filename at $sha" >&2
+            exit 1
+          }
+
+          download "setup-environment.ps1"
+          # Ensure our local bootstrap wrapper exists (committed in this repo)
+          if [ ! -f scripts/windows-nvm-bootstrap.ps1 ]; then
+            echo "Missing scripts/windows-nvm-bootstrap.ps1" >&2
+            exit 1
+          fi
+
+      - name: Run Windows setup script
+        shell: pwsh
+        run: |
+          # Ensure typical NVM locations are on PATH for this process so that after install, nvm.exe is discoverable
+          $env:NVM_HOME = if ($env:NVM_HOME) { $env:NVM_HOME } else { Join-Path $env:ProgramData 'nvm' }
+          $env:NVM_SYMLINK = if ($env:NVM_SYMLINK) { $env:NVM_SYMLINK } else { 'C:\\Program Files\\nodejs' }
+          $candidatePaths = @($env:NVM_HOME, (Join-Path $env:ProgramData 'chocolatey\bin'))
+          foreach ($p in $candidatePaths) {
+            if ($p -and ($env:Path -split ';') -notcontains $p) {
+              $env:Path = "$p;" + $env:Path
+            }
+          }
+
+          & "scripts/windows-nvm-bootstrap.ps1" -UpstreamScriptPath (Resolve-Path "scripts/setup-environment.ps1") *>&1 | Tee-Object -FilePath setup-windows.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { exit $code }
+
+      - name: Upload setup log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-windows-log
+          path: setup-windows.log
