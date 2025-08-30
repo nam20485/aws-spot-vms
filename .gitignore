@@ -416,3 +416,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+tf/.terraform/providers/registry.terraform.io/hashicorp/aws/6.11.0/windows_amd64/LICENSE.txt
+tf/.terraform/providers/registry.terraform.io/hashicorp/aws/6.11.0/windows_amd64/terraform-provider-aws_v6.11.0_x5.exe
+tf/.terraform/providers/registry.terraform.io/hashicorp/template/2.2.0/windows_amd64/terraform-provider-template_v2.2.0_x4.exe
+tf/.terraform.lock.hcl
