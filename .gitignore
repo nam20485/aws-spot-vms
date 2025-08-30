@@ -422,3 +422,5 @@ tf/.terraform/providers/registry.terraform.io/hashicorp/template/2.2.0/windows_a
 tf/.terraform.lock.hcl
 tf/terraform.tfstate.backup
 tf/terraform.tfstate
+tf/tfplan
+tf/aws-spot-vms.pem
