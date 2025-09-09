@@ -111,14 +111,11 @@ resource "aws_security_group" "fsx_sg" {
 # 3. STORAGE: FSx for Lustre File System (For Linux/Ubuntu)
 # -----------------------------------------------------------
 resource "aws_fsx_lustre_file_system" "workstation_fs" {
-  storage_capacity   = 1200
-  subnet_ids         = [aws_subnet.main.id]
-  security_group_ids = [aws_security_group.fsx_sg.id]
-  deployment_type    = "SCRATCH_2"
-
-  lustre_configuration {
-    per_unit_storage_throughput = 200
-  }
+  storage_capacity            = 1200
+  subnet_ids                  = [aws_subnet.main.id]
+  security_group_ids          = [aws_security_group.fsx_sg.id]
+  deployment_type             = "SCRATCH_2"
+  #per_unit_storage_throughput = 200 # Corrected syntax
 
   tags = {
     Name = "ubuntu-WorkstationCache"

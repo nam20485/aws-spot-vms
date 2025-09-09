@@ -1,0 +1,41 @@
+# This script is run automatically on the Windows instance's first boot.
+# It installs necessary software, maps the FSx Windows share, and installs GPU drivers.
+
+Start-Transcript -Path "C:\transcript.log" -Append
+
+Write-Host "Starting workstation setup..."
+
+# 1. Install AWS PowerShell Tools for S3 download (driver) and FSx queries if needed
+try {
+  Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+  Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+  Install-Module -Name AWSPowerShell.NetCore -Force -Confirm:$false
+} catch { Write-Host "Warning installing AWSPowerShell.NetCore: $($_.Exception.Message)" }
+
+# 2. Map FSx Windows share as F:
+$fsxDns = "${fsx_dns}"
+$sharePath = "\\$fsxDns\share"
+Write-Host "Mapping F: to $sharePath..."
+try {
+  New-SmbMapping -LocalPath "F:" -RemotePath $sharePath -Persistent $true
+  Write-Host "F: mapped successfully."
+} catch {
+  Write-Host "Failed to map F:: $($_.Exception.Message)"
+}
+
+# 3. Download and install NVIDIA GRID drivers for Windows Server 2019/2022 (g4dn etc.)
+$Bucket = "ec2-windows-nvidia-drivers"
+$Key = "latest/GRID-WINDOWS-SERVER-2019-2022/NVIDIA-GRID-WINDOWS-537.13.exe"
+$DriverFile = "C:\NVIDIA-GRID-driver.exe"
+try {
+  Read-S3Object -BucketName $Bucket -Key $Key -File $DriverFile -Region "us-east-1"
+  Write-Host "Driver downloaded. Installing..."
+  Start-Process -FilePath $DriverFile -ArgumentList "-s -noreboot" -Wait
+  Write-Host "Driver installation complete."
+} catch {
+  Write-Host "Warning: Driver download/install failed: $($_.Exception.Message)"
+}
+
+Write-Host "Setup complete. Restarting in 60 seconds..."
+Stop-Transcript
+Restart-Computer -Force
