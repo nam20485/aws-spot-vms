@@ -26,6 +26,6 @@ variable "key_name" {
   description = "The name of your AWS EC2 key pair for SSH access."
   type        = string
   # IMPORTANT: You must change this to the name of a key pair that exists in your account.
-  default     = "aws-spot-vms"
+  default     = "aws-spot-vms2"
 }
 

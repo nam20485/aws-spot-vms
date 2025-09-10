@@ -124,6 +124,37 @@ resource "aws_fsx_lustre_file_system" "workstation_fs" {
 
 # 4. COMPUTE: The Ubuntu GPU Workstation Instance
 # ------------------------------------------------
+
+# IAM Role to allow the instance to communicate with AWS APIs (Best Practice)
+resource "aws_iam_instance_profile" "workstation_profile" {
+  name = "ubuntu-workstation-profile"
+  role = aws_iam_role.workstation_role.name
+}
+
+resource "aws_iam_role" "workstation_role" {
+  name = "ubuntu-workstation-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Attach the AmazonSSMManagedInstanceCore policy to the workstation role (replacement for deprecated managed_policy_arns argument)
+resource "aws_iam_role_policy_attachment" "workstation_ssm_core" {
+  role       = aws_iam_role.workstation_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# 4. COMPUTE: The Ubuntu GPU Workstation Instance
+# ------------------------------------------------
 # Find the latest Ubuntu 22.04 LTS AMI
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -146,6 +177,8 @@ resource "aws_instance" "workstation" {
   vpc_security_group_ids      = [aws_security_group.workstation_sg.id]
   associate_public_ip_address = true
   key_name                    = var.key_name
+
+  iam_instance_profile        = aws_iam_instance_profile.workstation_profile.name # <-- ADD THIS LINE
 
   # This runs the bash setup script on first boot
   user_data = templatefile("${path.module}/workstation_setup.sh", {
