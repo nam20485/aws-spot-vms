@@ -111,10 +111,10 @@ resource "aws_security_group" "fsx_sg" {
 # 3. STORAGE: FSx for Lustre File System (For Linux/Ubuntu)
 # -----------------------------------------------------------
 resource "aws_fsx_lustre_file_system" "workstation_fs" {
-  storage_capacity            = 1200
-  subnet_ids                  = [aws_subnet.main.id]
-  security_group_ids          = [aws_security_group.fsx_sg.id]
-  deployment_type             = "SCRATCH_2"
+  storage_capacity   = 1200
+  subnet_ids         = [aws_subnet.main.id]
+  security_group_ids = [aws_security_group.fsx_sg.id]
+  deployment_type    = "SCRATCH_2"
   #per_unit_storage_throughput = 200 # Corrected syntax
 
   tags = {
@@ -178,7 +178,7 @@ resource "aws_instance" "workstation" {
   associate_public_ip_address = true
   key_name                    = var.key_name
 
-  iam_instance_profile        = aws_iam_instance_profile.workstation_profile.name # <-- ADD THIS LINE
+  iam_instance_profile = aws_iam_instance_profile.workstation_profile.name # <-- ADD THIS LINE
 
   # This runs the bash setup script on first boot
   user_data = templatefile("${path.module}/workstation_setup.sh", {
@@ -195,7 +195,7 @@ resource "aws_instance" "workstation" {
 # ------------------------------------------------
 resource "aws_eip" "workstation_ip" {
   instance = aws_instance.workstation.id
-  domain      = "vpc"
+  domain   = "vpc"
   tags = {
     Name = "ubuntu-Workstation-EIP"
   }

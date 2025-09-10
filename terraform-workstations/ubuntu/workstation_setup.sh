@@ -35,7 +35,7 @@ if lspci | grep -i -E 'NVIDIA|3D controller: Amazon'; then
     if apt-get update -y; then
       break
     fi
-    echo "apt-get update failed (attempt ${attempt}); retrying in 10s..."
+  echo "apt-get update failed (attempt $${attempt}); retrying in 10s..."
     sleep 10
   done
   echo "Attempting cuda-drivers meta-package install..."
@@ -75,13 +75,13 @@ mkdir -p /fsx
 if ! grep -q "/fsx " /proc/mounts; then
   # shellcheck disable=SC2154 # fsx_dns_name & fsx_mount_name are provided via Terraform template interpolation
   for attempt in 1 2 3 4 5 6 7 8; do
-    echo "FSx mount attempt ${attempt}..."
+  echo "FSx mount attempt $${attempt}..."
     if mount -t lustre -o noatime,flock "${fsx_dns_name}@tcp:/${fsx_mount_name}" /fsx; then
       echo "FSx mounted successfully."
       break
     else
-      rc=$?
-      echo "Mount failed (exit ${rc}). Retrying in 15s..."
+  rc=$?
+  echo "Mount failed (exit $${rc}). Retrying in 15s..."
       sleep 15
     fi
   done
