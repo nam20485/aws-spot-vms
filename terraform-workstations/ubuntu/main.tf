@@ -1,7 +1,5 @@
 # Terraform provider configuration
 terraform {
-  required_version = ">= 1.6.0, < 2.0.0"
-
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -12,6 +10,13 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+}
+
+# Provider alias required for the public SSM parameter lookup.
+# It ensures the lookup happens in a region where the parameter is guaranteed to exist.
+provider "aws" {
+  alias  = "us-east-1"
+  region = "us-east-1"
 }
 
 # 1. NETWORKING RESOURCES
@@ -33,7 +38,7 @@ resource "aws_internet_gateway" "main" {
 resource "aws_subnet" "main" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.subnet_cidr_block
-  map_public_ip_on_launch = true # Instances in this subnet get a public IP
+  map_public_ip_on_launch = true
   availability_zone       = "${var.aws_region}a"
   tags = {
     Name = "ubuntu-Workstation-Subnet"
@@ -63,15 +68,13 @@ resource "aws_security_group" "workstation_sg" {
   description = "Controls access to the EC2 Workstation"
   vpc_id      = aws_vpc.main.id
 
-  # Allow SSH from anywhere (WARNING: Restrict this to your IP in production)
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["50.47.212.98/32"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Allow all outbound traffic
   egress {
     from_port   = 0
     to_port     = 0
@@ -89,7 +92,6 @@ resource "aws_security_group" "fsx_sg" {
   description = "Allow Lustre LNET traffic from within the VPC"
   vpc_id      = aws_vpc.main.id
 
-  # Allow Lustre traffic on port 988 from any resource within the same VPC
   ingress {
     description = "Allow Lustre LNET traffic"
     from_port   = 988
@@ -110,14 +112,14 @@ resource "aws_security_group" "fsx_sg" {
   }
 }
 
-# 3. STORAGE: FSx for Lustre File System (For Linux/Ubuntu)
+# 3. STORAGE: FSx for Lustre File System
 # -----------------------------------------------------------
 resource "aws_fsx_lustre_file_system" "workstation_fs" {
-  storage_capacity   = 1200
-  subnet_ids         = [aws_subnet.main.id]
-  security_group_ids = [aws_security_group.fsx_sg.id]
-  deployment_type    = "SCRATCH_2"
-  #per_unit_storage_throughput = 200 # Corrected syntax
+  storage_capacity            = 1200
+  subnet_ids                  = [aws_subnet.main.id]
+  security_group_ids          = [aws_security_group.fsx_sg.id]
+  deployment_type             = "SCRATCH_2"
+  per_unit_storage_throughput = 200
 
   tags = {
     Name = "ubuntu-WorkstationCache"
@@ -126,8 +128,7 @@ resource "aws_fsx_lustre_file_system" "workstation_fs" {
 
 # 4. COMPUTE: The Ubuntu GPU Workstation Instance
 # ------------------------------------------------
-
-# IAM Role to allow the instance to communicate with AWS APIs (Best Practice)
+# IAM Role and Profile
 resource "aws_iam_instance_profile" "workstation_profile" {
   name = "ubuntu-workstation-profile"
   role = aws_iam_role.workstation_role.name
@@ -139,53 +140,39 @@ resource "aws_iam_role" "workstation_role" {
     Version = "2012-10-17",
     Statement = [
       {
-        Action = "sts:AssumeRole",
-        Effect = "Allow",
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
+        Action    = "sts:AssumeRole",
+        Effect    = "Allow",
+        Principal = { Service = "ec2.amazonaws.com" }
       }
     ]
   })
 }
 
-# Attach the AmazonSSMManagedInstanceCore policy to the workstation role (replacement for deprecated managed_policy_arns argument)
 resource "aws_iam_role_policy_attachment" "workstation_ssm_core" {
   role       = aws_iam_role.workstation_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# ------------------------------------------------
-# Find the latest Ubuntu 24.04 LTS AMI
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical's official AWS account ID
-
-  filter {
-    name = "name"
-    # CORRECTED: Using the new naming convention for Ubuntu 24.04 Pro images
-    values = ["ubuntu-pro-server/images/hvm-ssd/ubuntu-noble-24.04-amd64-server-*"]
-  }
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+# Find the latest Ubuntu 24.04 LTS AMI (using the robust SSM Parameter method)
+data "aws_ssm_parameter" "ubuntu_ami" {
+  provider = aws.us-east-1 # Use the provider alias for this public parameter lookup
+  name     = "/aws/service/canonical/ubuntu/pro-server/24.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
 }
 
 resource "aws_instance" "workstation" {
-  ami                         = data.aws_ami.ubuntu.id
+  ami                         = data.aws_ssm_parameter.ubuntu_ami.value
   instance_type               = var.instance_type
   subnet_id                   = aws_subnet.main.id
   vpc_security_group_ids      = [aws_security_group.workstation_sg.id]
   associate_public_ip_address = true
   key_name                    = var.key_name
+  iam_instance_profile        = aws_iam_instance_profile.workstation_profile.name
 
-  iam_instance_profile = aws_iam_instance_profile.workstation_profile.name # <-- ADD THIS LINE
-
-  # This runs the bash setup script on first boot
-  user_data = templatefile("${path.module}/workstation_setup.sh", {
-    fsx_dns_name   = aws_fsx_lustre_file_system.workstation_fs.dns_name
-    fsx_mount_name = aws_fsx_lustre_file_system.workstation_fs.mount_name
+  user_data = templatefile("${path.module}/setup_puppet.sh", {
+    puppet_manifest = templatefile("${path.module}/workstation.pp", {
+      fsx_dns_name   = aws_fsx_lustre_file_system.workstation_fs.dns_name
+      fsx_mount_name = aws_fsx_lustre_file_system.workstation_fs.mount_name
+    })
   })
 
   tags = {
@@ -202,3 +189,4 @@ resource "aws_eip" "workstation_ip" {
     Name = "ubuntu-Workstation-EIP"
   }
 }
+
