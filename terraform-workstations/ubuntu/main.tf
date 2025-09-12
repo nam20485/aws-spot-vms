@@ -157,7 +157,7 @@ resource "aws_iam_role_policy_attachment" "workstation_ssm_core" {
 # Find the latest Ubuntu 24.04 LTS AMI (using the robust SSM Parameter method)
 data "aws_ssm_parameter" "ubuntu_ami" {
   provider = aws.us-east-1 # Use the provider alias for this public parameter lookup
-  name     = "/aws/service/canonical/ubuntu/pro-server/24.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
+  name     = "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
 }
 
 resource "aws_instance" "workstation" {
