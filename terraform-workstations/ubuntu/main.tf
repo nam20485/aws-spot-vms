@@ -6,6 +6,7 @@ terraform {
       version = "~> 5.0"
     }
   }
+  required_version = ">= 1.6.0, < 2.0.0"
 }
 
 provider "aws" {
@@ -167,6 +168,7 @@ resource "aws_instance" "workstation" {
   associate_public_ip_address = true
   key_name                    = var.key_name
   iam_instance_profile        = aws_iam_instance_profile.workstation_profile.name
+  monitoring                   = true
 
   user_data = templatefile("${path.module}/setup_puppet.sh", {
     puppet_manifest = templatefile("${path.module}/workstation.pp", {

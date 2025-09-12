@@ -26,10 +26,10 @@ apt::source { 'fsx-lustre-repo':
 }
 
 # Install the Lustre client package for the current running kernel
-package { 'lustre-client-modules':
-  name      => "lustre-client-modules-${facts['kernelrelease']}",
+package { "lustre-client-modules":
+  name      => "lustre-client-modules-$${facts[\"kernelrelease\"]}",
   ensure    => installed,
-  require   => Apt::Source['fsx-lustre-repo'],
+  require   => Apt::Source["fsx-lustre-repo"],
 }
 
 # Create the mount point directory
@@ -58,5 +58,5 @@ Because you are changing the fundamental base operating system (the AMI), you mu
 2.  Run the same replacement command you used before:
     ```bash
     terraform apply -replace="aws_instance.workstation"
-    
+
 
