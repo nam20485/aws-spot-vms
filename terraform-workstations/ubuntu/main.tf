@@ -155,7 +155,6 @@ resource "aws_iam_role_policy_attachment" "workstation_ssm_core" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# 4. COMPUTE: The Ubuntu GPU Workstation Instance
 # ------------------------------------------------
 # Find the latest Ubuntu 24.04 LTS AMI
 data "aws_ami" "ubuntu" {
@@ -163,8 +162,9 @@ data "aws_ami" "ubuntu" {
   owners      = ["099720109477"] # Canonical's official AWS account ID
 
   filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-noble-24.04-amd64-server-*"]
+    name = "name"
+    # CORRECTED: Using the new naming convention for Ubuntu 24.04 Pro images
+    values = ["ubuntu-pro-server/images/hvm-ssd/ubuntu-noble-24.04-amd64-server-*"]
   }
   filter {
     name   = "virtualization-type"
