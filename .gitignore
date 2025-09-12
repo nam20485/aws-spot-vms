@@ -104,7 +104,7 @@ StyleCopReport.xml
 *.tmp
 *.tmp_proj
 *_wpftmp.csproj
-*.log
+#*.log
 *.tlog
 *.vspscc
 *.vssscc
@@ -433,3 +433,6 @@ terraform-workstations/ubuntu/.terraform/providers/registry.terraform.io/hashico
 terraform-workstations/ubuntu/.terraform.lock.hcl
 terraform-workstations/ubuntu/terraform.tfstate
 terraform-workstations/ubuntu/terraform.tfstate.backup
+terraform-workstations/ubuntu/nvidia-installer.log
+terraform-workstations/ubuntu/nvidia-installer-warnings.txt
+firebase-debug.log

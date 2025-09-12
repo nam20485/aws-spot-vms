@@ -7,54 +7,71 @@ exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 echo "--- Starting Workstation Setup ---"
 
 # --- 1. System Preparation ---
-# Wait for cloud-init to finish its own setup
-while [ ! -f /var/lib/cloud/instance/boot-finished ]; do
-  echo 'Waiting for cloud-init to finish...'
-  sleep 1
-done
+# NOTE: This script is executed by cloud-init (user-data). Do NOT wait on cloud-init status here,
+# or it will deadlock. Proceed directly with setup.
 
 echo "Updating package lists..."
 apt-get update -y
 
 echo "Installing prerequisite packages..."
-apt-get install -y software-properties-common curl wget gnupg lsb-release "linux-headers-$(uname -r)"
+apt-get install -y software-properties-common curl wget gnupg lsb-release "linux-headers-$(uname -r) unzip"
 
-# --- 2. Install NVIDIA Drivers ---
-echo "Checking for GPU hardware..."
-if lspci | grep -i -E 'NVIDIA|3D controller: Amazon'; then
-  echo "GPU detected. Beginning driver install sequence..."
-  set +e
-  echo "Adding NVIDIA CUDA repository key & repo (idempotent)..."
-  wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring.deb
-  dpkg -i /tmp/cuda-keyring.deb >/dev/null 2>&1 || true
-  if ! grep -q 'developer.download.nvidia.com' /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
-    add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" -y || true
-  fi
-  echo "Updating apt cache (with retries)..."
-  for attempt in 1 2 3 4 5; do
-    if apt-get update -y; then
-      break
-    fi
-  echo "apt-get update failed (attempt $${attempt}); retrying in 10s..."
-    sleep 10
-  done
-  echo "Attempting cuda-drivers meta-package install..."
-  apt-get install -y cuda-drivers || {
-    echo "cuda-drivers failed, falling back to a specific driver version (535 or latest available)."
-    apt-cache policy | grep -i nvidia || true
-    apt-get install -y nvidia-driver-535 || apt-get install -y nvidia-driver-550 || true
-  }
-  echo "Verifying NVIDIA driver (non-fatal if not yet loaded)..."
-  if command -v nvidia-smi >/dev/null 2>&1; then
-    nvidia-smi || echo "nvidia-smi executed but reported an issue. Continuing."
-  else
-    echo "nvidia-smi not yet available (driver install may require reboot)."
-  fi
-  set -e
-  echo "NVIDIA driver step complete."
-else
-  echo "No GPU device detected; skipping NVIDIA driver installation."
-fi
+# install aws cli
+echo "Installing AWS CLI..."
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+
+# --- 2. Install NVIDIA Drivers (GRID Driver) ---
+echo "Updating package cache and getting package updates..."
+apt-get update -y
+
+echo "Installing gcc and make..."
+apt-get install -y gcc make
+
+echo "Upgrading linux-aws package..."
+apt-get upgrade -y linux-aws
+
+echo "A reboot is required to load the latest kernel version. Please reboot the instance manually after this script completes."
+# sudo reboot # Omitted for automated script execution
+
+echo "Installing kernel headers package..."
+apt-get install -y "linux-headers-$(uname -r)" "linux-modules-extra-$(uname -r)"
+
+echo "Disabling nouveau open source driver..."
+cat << EOF | tee --append /etc/modprobe.d/blacklist.conf
+blacklist vga16fb
+blacklist nouveau
+blacklist rivafb
+blacklist nvidiafb
+blacklist rivatv
+EOF
+
+echo "Editing /etc/default/grub and rebuilding Grub configuration..."
+# This sed command adds the line if it doesn't exist, or replaces it if it does.
+# It ensures GRUB_CMDLINE_LINUX is set correctly.
+sed -i '/^GRUB_CMDLINE_LINUX=/c\GRUB_CMDLINE_LINUX="rdblacklist=nouveau"' /etc/default/grub
+update-grub
+
+echo "Downloading the GRID driver installation utility..."
+aws s3 cp --recursive s3://ec2-linux-nvidia-drivers/latest/ .
+
+echo "Adding execute permissions to the driver installation utility..."
+chmod +x NVIDIA-Linux-x86_64*.run
+
+echo "Running the self-install script for GRID driver. Follow prompts if any."
+/bin/sh ./NVIDIA-Linux-x86_64*.run
+
+echo "Confirming driver functionality (output will be logged)."
+nvidia-smi -q | head
+
+echo "Disabling GSP for NVIDIA vGPU software version 14.x or greater (if applicable)..."
+touch /etc/modprobe.d/nvidia.conf
+echo "options nvidia NVreg_EnableGpuFirmware=0" | tee --append /etc/modprobe.d/nvidia.conf
+
+echo "NVIDIA GRID driver installation complete. Another reboot is required to apply all changes. Please reboot the instance manually after this script completes."
+# sudo reboot # Omitted for automated script execution
+"
 
 # --- 3. Install FSx for Lustre Client ---
 echo "Installing FSx for Lustre client..."
