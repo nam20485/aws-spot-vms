@@ -157,7 +157,7 @@ resource "aws_iam_role_policy_attachment" "workstation_ssm_core" {
 
 # 4. COMPUTE: The Ubuntu GPU Workstation Instance
 # ------------------------------------------------
-# Find the latest Ubuntu 22.04 LTS AMI
+# Find the latest Ubuntu 24.04 LTS AMI
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical's official AWS account ID
