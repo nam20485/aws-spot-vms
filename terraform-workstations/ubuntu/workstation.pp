@@ -47,16 +47,4 @@ mount { '/fsx':
     Package['lustre-client-modules'],
     File['/fsx'],
   ],
-}
-```
-
-### How to Deploy the Upgrade
-
-Because you are changing the fundamental base operating system (the AMI), you must replace the instance.
-
-1.  Replace the contents of your existing files with the updated versions above.
-2.  Run the same replacement command you used before:
-    ```bash
-    terraform apply -replace="aws_instance.workstation"
-
-
+} # End of mount resource

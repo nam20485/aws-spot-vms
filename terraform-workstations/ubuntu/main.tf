@@ -120,7 +120,8 @@ resource "aws_fsx_lustre_file_system" "workstation_fs" {
   subnet_ids                  = [aws_subnet.main.id]
   security_group_ids          = [aws_security_group.fsx_sg.id]
   deployment_type             = "SCRATCH_2"
-  per_unit_storage_throughput = 200
+  # per_unit_storage_throughput is not valid for SCRATCH_2 deployments
+  # Remove or switch to PERSISTENT_2 if throughput per TiB is required
 
   tags = {
     Name = "ubuntu-WorkstationCache"

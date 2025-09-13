@@ -58,3 +58,8 @@ Your Ubuntu cloud workstation is now ready to use\!
 ### **Cleaning Up**
 
 When you are finished, run terraform destroy from the same directory to delete all the resources and stop incurring costs.
+
+## GPU driver quick reference
+
+See NVIDIA GPU Driver Quick Reference:
+- ./NVIDIA-DRIVER-QUICKREF.md
