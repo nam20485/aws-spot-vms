@@ -42,7 +42,7 @@ mount { '/fsx':
   ensure  => 'mounted',
   device  => '${fsx_dns_name}@tcp:/${fsx_mount_name}',
   fstype  => 'lustre',
-  options => 'noatime,flock,_netdev',
+  options => 'nofail,_netdev,noatime,flock,x-systemd.requires=network-online.target,x-systemd.mount-timeout=30',
   require => [
     Package['lustre-client-modules'],
     File['/fsx'],

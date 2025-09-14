@@ -45,7 +45,9 @@ function Build-RemoteCommand {
         "echo '--- Current mounts (lustre) ---'",
         "mount | grep -i lustre || true",
         "echo '--- /etc/fstab entries (lustre) ---'",
-        "grep -iE 'lustre|@tcp:/' /etc/fstab || true",
+        "grep -nEi 'lustre|@tcp:/' /etc/fstab || true",
+        "echo '--- findmnt /fsx ---'",
+        'findmnt -no SOURCE,TARGET,OPTIONS /fsx || true',
         "echo '--- df /fsx ---'",
         'df -h /fsx || true'
       ) -join ' '
@@ -54,14 +56,17 @@ function Build-RemoteCommand {
       if (-not $FsxDnsName -or -not $FsxMountName) {
         throw 'For -Action mount, you must provide -FsxDnsName and -FsxMountName.'
       }
-      $fstabLine = "$FsxDnsName@tcp:/$FsxMountName /fsx lustre defaults,_netdev,noatime,flock 0 0"
-      $persistCmd = if ($Persist) { "echo '$fstabLine' | sudo tee -a /etc/fstab >/dev/null; echo 'Persisted to /etc/fstab';" } else { '' }
+      $fstabLine = "$FsxDnsName@tcp:/$FsxMountName /fsx lustre nofail,_netdev,noatime,flock,x-systemd.requires=network-online.target,x-systemd.mount-timeout=30 0 0"
+      $persistCmd = if ($Persist) { @(
+        "if ! grep -q '^$FsxDnsName@tcp:/$FsxMountName[ ]\+/fsx[ ]\+lustre' /etc/fstab; then echo '$fstabLine' | sudo tee -a /etc/fstab >/dev/null; echo 'Persisted to /etc/fstab'; else echo 'fstab entry already present'; fi;"
+      ) -join ' ' } else { '' }
       return @(
         'set -e;',
         'sudo mkdir -p /fsx;',
-        "echo 'Mounting: $FsxDnsName@tcp:/$FsxMountName -> /fsx'",
-        "sudo mount -t lustre -o noatime,flock $FsxDnsName@tcp:/$FsxMountName /fsx",
+        "if mountpoint -q /fsx; then echo '/fsx already mounted'; else echo 'Mounting: $FsxDnsName@tcp:/$FsxMountName -> /fsx'; sudo mount -t lustre -o noatime,flock $FsxDnsName@tcp:/$FsxMountName /fsx; fi;",
         $persistCmd,
+        "echo 'findmnt /fsx:'",
+        'findmnt -no SOURCE,TARGET,OPTIONS /fsx || true',
         "echo 'df -h /fsx:'",
         'df -h /fsx'
       ) -join ' '
