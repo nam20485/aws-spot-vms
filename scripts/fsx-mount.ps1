@@ -4,13 +4,13 @@
 
 .EXAMPLES
   # Show FSx/Lustre status (mounts, fstab, df)
-  .\scripts\fsx-mount.ps1 -Host ubuntugpuws -Action status
+  .\scripts\fsx-mount.ps1 -SshHost ubuntugpuws -Action status
 
   # Mount now (no persistence) with explicit DNS/mount name
-  .\scripts\fsx-mount.ps1 -Host ubuntugpuws -Action mount -FsxDnsName fs-abcde.fsx.us-east-1.amazonaws.com -FsxMountName fs-12345678
+  .\scripts\fsx-mount.ps1 -SshHost ubuntugpuws -Action mount -FsxDnsName fs-abcde.fsx.us-east-1.amazonaws.com -FsxMountName fs-12345678
 
   # Mount and persist to /etc/fstab
-  .\scripts\fsx-mount.ps1 -Host ubuntugpuws -Action mount -FsxDnsName fs-abcde.fsx.us-east-1.amazonaws.com -FsxMountName fs-12345678 -Persist
+  .\scripts\fsx-mount.ps1 -SshHost ubuntugpuws -Action mount -FsxDnsName fs-abcde.fsx.us-east-1.amazonaws.com -FsxMountName fs-12345678 -Persist
 
 .NOTES
   - Keeps it simple; no advanced error handling
@@ -18,7 +18,7 @@
 #>
 param(
   [Parameter(Mandatory = $true)]
-  [string]$Host,
+  [string]$SshHost,
 
   [ValidateSet('status','mount')]
   [string]$Action = 'status',
@@ -77,24 +77,10 @@ catch {
   exit 1
 }
 
-Write-Host "[fsx-mount.ps1] ssh $Host -- $Action" -ForegroundColor Cyan
+Write-Host "[fsx-mount.ps1] ssh $SshHost -- $Action" -ForegroundColor Cyan
 
-$psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = 'ssh'
-$psi.ArgumentList.Add($Host)
-$psi.ArgumentList.Add($remote)
-$psi.RedirectStandardOutput = $true
-$psi.RedirectStandardError = $true
-$psi.UseShellExecute = $false
-
-$proc = New-Object System.Diagnostics.Process
-$proc.StartInfo = $psi
-$null = $proc.Start()
-$stdout = $proc.StandardOutput.ReadToEnd()
-$stderr = $proc.StandardError.ReadToEnd()
-$proc.WaitForExit()
-
-if ($stdout) { Write-Output $stdout }
-if ($stderr) { Write-Error $stderr }
-
-exit $proc.ExitCode
+# Prefer native invocation for Windows PowerShell compatibility
+$cmdArgs = @($SshHost, $remote)
+& ssh @cmdArgs
+$exitCode = $LASTEXITCODE
+exit $exitCode
