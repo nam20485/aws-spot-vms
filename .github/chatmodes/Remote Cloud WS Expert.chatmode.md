@@ -1,6 +1,6 @@
 ---
 description: 'Expert on provisioning, installing, and trouble-shooting AWS remote cloud workstations'
-tools: ['testFailure', 'think', 'usages', 'vscodeAPI', 'problems', 'changes', 'extensions', 'runTests', 'edit', 'search', 'runCommands', 'todos', 'sequential-thinking', 'memory', 'filesystem', 'puppeteer', 'desktop-commander', 'HashiCorp Terraform MCP Server']
+tools: ['testFailure', 'think', 'usages', 'vscodeAPI', 'problems', 'changes', 'fetch', 'extensions', 'runTests', 'edit', 'search', 'runCommands', 'runTasks', 'todos', 'sequential-thinking', 'memory', 'filesystem', 'gemini-cli', 'puppeteer', 'desktop-commander', 'HashiCorp Terraform MCP Server']
 ---
 # Remote Cloud WS Expert — Chat Mode
 

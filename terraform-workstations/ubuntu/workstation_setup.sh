@@ -71,37 +71,45 @@ echo "options nvidia NVreg_EnableGpuFirmware=0" | tee --append /etc/modprobe.d/n
 
 echo "NVIDIA GRID driver installation complete. Another reboot is required to apply all changes. Please reboot the instance manually after this script completes."
 # sudo reboot # Omitted for automated script execution
-"
 
 # --- 3. Install FSx for Lustre Client ---
 echo "Installing FSx for Lustre client..."
-# Add the AWS repository for the Lustre client
-curl -sS https://fsx-lustre-client-repo-public-keys.s3.amazonaws.com/fsx-main-repo-public-key.asc | apt-key add -
-echo "deb https://fsx-lustre-client-repo.s3.amazonaws.com/ubuntu jammy main" > /etc/apt/sources.list.d/fsx-lustre-client-repo.list
+# Add the AWS repository for the Lustre client (Ubuntu 24.04 noble) using signed-by keyring
+install -m 0755 -d /usr/share/keyrings
+curl -fsSL https://fsx-lustre-client-repo-public-keys.s3.amazonaws.com/fsx-main-repo-public-key.asc | gpg --dearmor | tee /usr/share/keyrings/fsx-lustre.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/fsx-lustre.gpg] https://fsx-lustre-client-repo.s3.amazonaws.com/ubuntu noble main" > /etc/apt/sources.list.d/fsx-lustre-client-repo.list
 apt-get update -y
 
-# Install the client and its dependencies
-apt-get install -y "lustre-client-modules-$(uname -r)"
-
-echo "FSx client installation complete."
+# Install the client and its dependencies if available for the running kernel
+if apt-cache show "lustre-client-modules-$(uname -r)" >/dev/null 2>&1; then
+  apt-get install -y "lustre-client-modules-$(uname -r)" lustre-client-utils
+  echo "FSx client installation complete."
+else
+  echo "FSx client for kernel $(uname -r) is not available in the FSx repo yet. Skipping install to avoid failure."
+fi
 
 # --- 4. Mount the FSx File System ---
 echo "Mounting the FSx file system..."
 mkdir -p /fsx
 
-if ! grep -q "/fsx " /proc/mounts; then
-  # shellcheck disable=SC2154 # fsx_dns_name & fsx_mount_name are provided via Terraform template interpolation
-  for attempt in 1 2 3 4 5 6 7 8; do
-  echo "FSx mount attempt $${attempt}..."
-    if mount -t lustre -o noatime,flock "${fsx_dns_name}@tcp:/${fsx_mount_name}" /fsx; then
-      echo "FSx mounted successfully."
-      break
-    else
-  rc=$?
-  echo "Mount failed (exit $${rc}). Retrying in 15s..."
-      sleep 15
-    fi
-  done
+# Only attempt to mount if the Lustre client is present
+if lsmod | grep -q lustre || modinfo lustre >/dev/null 2>&1; then
+  if ! grep -q "/fsx " /proc/mounts; then
+    # shellcheck disable=SC2154 # fsx_dns_name & fsx_mount_name are provided via Terraform template interpolation
+    for attempt in 1 2 3 4 5 6 7 8; do
+      echo "FSx mount attempt $${attempt}..."
+      if mount -t lustre -o noatime,flock "${fsx_dns_name}@tcp:/${fsx_mount_name}" /fsx; then
+        echo "FSx mounted successfully."
+        break
+      else
+        rc=$?
+        echo "Mount failed (exit $${rc}). Retrying in 15s..."
+        sleep 15
+      fi
+    done
+  fi
+else
+  echo "Lustre client kernel module not present; skipping FSx mount."
 fi
 
 if ! grep -q "/fsx " /proc/mounts; then
