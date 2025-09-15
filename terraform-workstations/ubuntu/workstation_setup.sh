@@ -124,3 +124,122 @@ else
 fi
 
 echo "--- Workstation Setup Complete ---"
+
+# --- 5. NICE DCV Install & Configure ---
+echo "Installing and configuring NICE DCV..."
+
+# Ensure DCV helper script is present and executable (embed content for cloud-init availability)
+DCV_HELPER="/opt/aws/workstation/setup_dcv.sh"
+install -d /opt/aws/workstation
+if [ ! -f "$DCV_HELPER" ]; then
+  cat > "$DCV_HELPER" <<'SCRIPT'
+#!/usr/bin/env bash
+#
+# Embedded from repository: terraform-workstations/ubuntu/setup_dcv.sh
+set -euo pipefail
+LOG="/var/log/setup-dcv.log"
+exec > >(tee -a "$LOG") 2>&1
+echo "[DCV] Starting NICE DCV setup..."
+if command -v dcvserver >/dev/null 2>&1; then
+  echo "[DCV] Detected existing dcvserver: $(dcvserver --version || true). Skipping install."
+else
+  echo "[DCV] Updating apt cache..."
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -y
+  echo "[DCV] Installing desktop environment (ubuntu-desktop) and GDM3... (this can take several minutes)"
+  if ! dpkg -s ubuntu-desktop >/dev/null 2>&1; then
+    apt-get install -y ubuntu-desktop
+  fi
+  if ! dpkg -s gdm3 >/dev/null 2>&1; then
+    apt-get install -y gdm3
+  fi
+  echo "[DCV] Disabling Wayland in /etc/gdm3/custom.conf..."
+  mkdir -p /etc/gdm3
+  CUSTOM_CONF="/etc/gdm3/custom.conf"
+  if [[ ! -f "$CUSTOM_CONF" ]]; then
+    cat > "$CUSTOM_CONF" <<'CFG'
+[daemon]
+WaylandEnable=false
+CFG
+  else
+    if ! grep -q '^\[daemon\]' "$CUSTOM_CONF"; then
+      sed -i '1i [daemon]' "$CUSTOM_CONF"
+    fi
+    if grep -q '^WaylandEnable=' "$CUSTOM_CONF"; then
+      sed -i 's/^WaylandEnable=.*/WaylandEnable=false/' "$CUSTOM_CONF"
+    else
+      awk '1; /^\[daemon\]$/ && !x {print "WaylandEnable=false"; x=1}' "$CUSTOM_CONF" >"$CUSTOM_CONF.tmp" && mv "$CUSTOM_CONF.tmp" "$CUSTOM_CONF"
+    fi
+  fi
+  echo "[DCV] Setting default target to graphical.target (start X on boot)"
+  systemctl set-default graphical.target || true
+  . /etc/os-release
+  VER_ID="${VERSION_ID:-}"
+  if [[ -z "${VER_ID}" ]]; then echo "[DCV] Could not determine Ubuntu VERSION_ID" >&2; exit 1; fi
+  ARCH_TAG="x86_64"
+  case "$(uname -m)" in
+    x86_64) ARCH_TAG="x86_64" ;;
+    aarch64|arm64) ARCH_TAG="aarch64" ;;
+    *) echo "[DCV] Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+  esac
+  case "$VER_ID" in
+    22.04|24.04) UBUNTU_TAG="ubuntu${VER_ID}" ;;
+    *) echo "[DCV] Unsupported/untested Ubuntu version $VER_ID. Supported: 22.04, 24.04" >&2; exit 1 ;;
+  esac
+  WORKDIR="/var/tmp/dcv-install"
+  mkdir -p "$WORKDIR"
+  cd "$WORKDIR"
+  URL="https://d1uj6qtbmh3dt5.cloudfront.net/nice-dcv-${UBUNTU_TAG}-${ARCH_TAG}.tgz"
+  echo "[DCV] Downloading DCV archive: $URL"
+  if ! curl -fSL "$URL" -o dcv.tgz; then
+    echo "[DCV] Failed to fetch $URL. See https://download.amazondcv.com/latest.html for links." >&2
+    exit 1
+  fi
+  echo "[DCV] Extracting archive..."
+  rm -rf dcv && mkdir dcv && tar -xzf dcv.tgz -C dcv --strip-components=1
+  cd dcv
+  echo "[DCV] Installing DCV server and components (.deb packages)"
+  apt-get install -y ./nice-dcv-server-*.deb || { echo "[DCV] DCV server install failed" >&2; exit 1; }
+  if ls ./nice-dcv-web-viewer-*.deb >/dev/null 2>&1; then apt-get install -y ./nice-dcv-web-viewer-*.deb || true; fi
+  if ls ./nice-xdcv-*.deb >/dev/null 2>&1; then apt-get install -y ./nice-xdcv-*.deb || true; fi
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    if ls ./nice-dcv-gl-*.deb >/dev/null 2>&1; then
+      echo "[DCV] NVIDIA GPU detected. Installing DCV GL."
+      apt-get install -y ./nice-dcv-gl-*.deb || true
+      if ls ./nice-dcv-gltest-*.deb >/dev/null 2>&1; then apt-get install -y ./nice-dcv-gltest-*.deb || true; fi
+    fi
+  else
+    echo "[DCV] NVIDIA GPU not detected. Skipping DCV GL package."
+  fi
+  echo "[DCV] Enabling and starting dcvserver service"
+  systemctl enable dcvserver || true
+  systemctl restart dcvserver || systemctl start dcvserver || true
+fi
+DCV_CONF="/etc/dcv/dcv.conf"
+if [[ -f "$DCV_CONF" ]]; then
+  echo "[DCV] Applying minimal defaults in $DCV_CONF"
+  if ! grep -q '^\[connectivity\]' "$DCV_CONF"; then echo '[connectivity]' >> "$DCV_CONF"; fi
+  if ! grep -q '^\[security\]' "$DCV_CONF"; then echo '[security]' >> "$DCV_CONF"; fi
+  if grep -q '^#*web-port=' "$DCV_CONF"; then
+    sed -i 's/^#*web-port=.*/web-port=8443/' "$DCV_CONF"
+  else
+    awk '1; /^\[connectivity\]$/ && !x {print "web-port=8443"; x=1}' "$DCV_CONF" >"$DCV_CONF.tmp" && mv "$DCV_CONF.tmp" "$DCV_CONF"
+  fi
+fi
+echo "[DCV] Restarting services to apply changes (gdm3 and dcvserver)"
+systemctl restart gdm3 || true
+systemctl restart dcvserver || true
+echo "[DCV] NICE DCV setup completed. A reboot is recommended if NVIDIA drivers or desktop packages were newly installed."
+SCRIPT
+  chmod +x "$DCV_HELPER"
+fi
+
+if ! command -v dcvserver >/dev/null 2>&1; then
+  bash "$DCV_HELPER" || echo "DCV setup encountered issues; check /var/log/setup-dcv.log" >&2
+else
+  echo "DCV already installed; ensuring service is running..."
+  systemctl enable dcvserver || true
+  systemctl restart dcvserver || true
+fi
+
+echo "NICE DCV setup step complete."
