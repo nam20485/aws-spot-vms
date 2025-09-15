@@ -1,3 +1,37 @@
+## Windows SSH alias tips (scp/ssh)
+
+If an scp/ssh alias didn’t work, check your `~/.ssh/config` for syntax errors. The config file only accepts directives (Host, HostName, User, IdentityFile, etc.). A stray `scp ...` command line inside the file will break parsing.
+
+Example corrected entry:
+
+```
+Host ubuntugpuws
+  HostName 52.1.238.145
+  User ubuntu
+  IdentityFile ~/.ssh/aws-spot-vms2.pem
+  IdentitiesOnly yes
+```
+
+Notes:
+- Remove any standalone `scp ...` lines from `~/.ssh/config`.
+- Prefer `IdentityFile ~/.ssh/aws-spot-vms2.pem` over a hard-coded `C:\Users\<you>\...` path; `~` works reliably with Windows OpenSSH.
+- Keep one Host block per alias; capitalization of `HostName` vs `Hostname` is not significant.
+
+Quick tests in PowerShell:
+
+```
+# See the final applied config (helpful for debugging)
+ssh -G ubuntugpuws | Select-String -Pattern 'hostname|user|identityfile'
+
+# Connect with the alias
+ssh ubuntugpuws
+
+# Copy a file with the alias (no -i flag needed when IdentityFile is set)
+scp .\terraform-workstations\ubuntu\setup_dcv.sh ubuntugpuws:/home/ubuntu/setup_dcv.sh
+```
+
+If you have multiple OpenSSH installations (e.g., Git for Windows vs Windows built-in), ensure you’re using the Windows built-in tools in `C:\\Windows\\System32\\OpenSSH\\`.
+
 ## NICE DCV on Ubuntu (22.04/24.04) — Install, Configure, and Integrate
 
 This guide explains how this repo installs and configures NICE DCV on Ubuntu GPU workstations built by Terraform. It also documents the sub-script that the post‑boot process calls, verification steps, and how this approach compares with the AWS blog and the official DCV documentation.
