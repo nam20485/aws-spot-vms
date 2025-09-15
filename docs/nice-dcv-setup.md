@@ -58,7 +58,7 @@ This guide explains how this repo installs and configures NICE DCV on Ubuntu GPU
 
 ### What we install
 
-- Desktop environment: `ubuntu-desktop` (GNOME)
+- Desktop environment: `ubuntu-desktop-minimal` (GNOME)
 - Display manager: `gdm3` with Wayland disabled (DCV requires Xorg)
 - NICE DCV Server for Ubuntu (latest archive per Ubuntu version and architecture)
 - DCV Web Viewer (browser access over 8443) — optional but installed when present
@@ -73,7 +73,7 @@ This guide explains how this repo installs and configures NICE DCV on Ubuntu GPU
 
 ### How it works (high level)
 
-1. Ensures GNOME + GDM3 are installed
+1. Ensures GNOME + GDM3 are installed (minimal desktop to reduce size and avoid Firefox snap)
 2. Disables Wayland in `/etc/gdm3/custom.conf` and sets default target to `graphical.target`
 3. Downloads the latest DCV archive for Ubuntu 22.04/24.04 and `x86_64` or `aarch64`
 4. Installs `nice-dcv-server`, then (when available) `nice-dcv-web-viewer` and `nice-xdcv`
@@ -110,6 +110,24 @@ When developing locally, you can validate the installer script in a container ap
 - Review `/var/log/setup-dcv.log` emitted inside the container for step-by-step confirmation.
 
 Note: The container cannot truly start DCV or GDM; this harness validates logic, downloads, and package resolution flows.
+
+Tip: The installer now uses `ubuntu-desktop-minimal` to avoid pulling the Firefox snap; this reduces disk usage and install time on small root volumes.
+
+### Low disk recovery (root volume nearly full)
+
+If you see messages like "no space left on device" or `/` at ~100%:
+
+- Clear apt caches and old kernels:
+  - `sudo apt-get clean`
+  - `sudo apt-get autoremove -y --purge`
+- Check large directories:
+  - `sudo du -h -d1 /var | sort -h`
+  - `sudo du -h -d1 / | sort -h`
+- If a snap install wedged due to low space:
+  - `sudo systemctl restart snapd`
+  - `snap changes` then `sudo snap abort <id>` (if needed), free space, then `sudo snap retry <id>`
+- Re-run the DCV installer after freeing space:
+  - `sudo /opt/aws/workstation/setup_dcv.sh`
 
 ### Security notes
 

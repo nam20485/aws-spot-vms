@@ -47,10 +47,10 @@ else
   if [[ "${DCV_SKIP_DESKTOP:-0}" == "1" ]]; then
     echo "[DCV] Skipping desktop environment install due to DCV_SKIP_DESKTOP=1"
   else
-    echo "[DCV] Installing desktop environment (ubuntu-desktop) and GDM3... (this can take several minutes)"
+    echo "[DCV] Installing desktop environment (ubuntu-desktop-minimal) and GDM3... (this can take several minutes)"
     # Install only if not present
-    if ! dpkg -s ubuntu-desktop >/dev/null 2>&1; then
-      apt-get install -y ubuntu-desktop
+    if ! dpkg -s ubuntu-desktop-minimal >/dev/null 2>&1; then
+      apt-get install -y ubuntu-desktop-minimal
     fi
     if ! dpkg -s gdm3 >/dev/null 2>&1; then
       apt-get install -y gdm3
