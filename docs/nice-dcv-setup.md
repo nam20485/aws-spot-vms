@@ -58,7 +58,12 @@ This guide explains how this repo installs and configures NICE DCV on Ubuntu GPU
 
 ### What we install
 
-- Desktop environment: `ubuntu-desktop-minimal` (GNOME)
+- Desktop environment (selectable):
+  - `cinnamon` (LightDM + Cinnamon, avoids snaps)
+  - `mate` (LightDM + MATE core, avoids snaps)
+  - `gnome` (full ubuntu-desktop; may pull Firefox snap)
+  - `gnome-minimal` (default; ubuntu-desktop-minimal)
+  - `none` (skip desktop)
 - Display manager: `gdm3` with Wayland disabled (DCV requires Xorg)
 - NICE DCV Server for Ubuntu (latest archive per Ubuntu version and architecture)
 - DCV Web Viewer (browser access over 8443) — optional but installed when present
@@ -73,7 +78,7 @@ This guide explains how this repo installs and configures NICE DCV on Ubuntu GPU
 
 ### How it works (high level)
 
-1. Ensures GNOME + GDM3 are installed (minimal desktop to reduce size and avoid Firefox snap)
+1. Installs the chosen desktop flavor and display manager
 2. Disables Wayland in `/etc/gdm3/custom.conf` and sets default target to `graphical.target`
 3. Downloads the latest DCV archive for Ubuntu 22.04/24.04 and `x86_64` or `aarch64`
 4. Installs `nice-dcv-server`, then (when available) `nice-dcv-web-viewer` and `nice-xdcv`
@@ -85,6 +90,13 @@ This guide explains how this repo installs and configures NICE DCV on Ubuntu GPU
 
 - The DCV step runs automatically at the end of `workstation_setup.sh`.
 - The embedded script logs to `/var/log/setup-dcv.log`. The wrapper logs to `/var/log/setup-dcv-wrapper.log`.
+- Choose a desktop flavor (optional) before running:
+  - `sudo DCV_DESKTOP=cinnamon /opt/aws/workstation/setup_dcv.sh`
+  - `sudo DCV_DESKTOP=mate /opt/aws/workstation/setup_dcv.sh`
+  - `sudo DCV_DESKTOP=gnome /opt/aws/workstation/setup_dcv.sh`
+  - `sudo DCV_DESKTOP=gnome-minimal /opt/aws/workstation/setup_dcv.sh` (default)
+  - `sudo DCV_DESKTOP=none /opt/aws/workstation/setup_dcv.sh` (skip desktop)
+
 - Re-run manually if needed:
   - `sudo /opt/aws/workstation/setup_dcv.sh`
 
@@ -111,7 +123,7 @@ When developing locally, you can validate the installer script in a container ap
 
 Note: The container cannot truly start DCV or GDM; this harness validates logic, downloads, and package resolution flows.
 
-Tip: The installer now uses `ubuntu-desktop-minimal` to avoid pulling the Firefox snap; this reduces disk usage and install time on small root volumes.
+Tip: Pick `cinnamon` or `mate` to avoid the Firefox snap entirely; both use LightDM and classic apt packages.
 
 ### Low disk recovery (root volume nearly full)
 

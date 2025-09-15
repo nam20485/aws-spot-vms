@@ -44,42 +44,60 @@ else
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
 
-  if [[ "${DCV_SKIP_DESKTOP:-0}" == "1" ]]; then
-    echo "[DCV] Skipping desktop environment install due to DCV_SKIP_DESKTOP=1"
+  DESKTOP_FLAVOR="${DCV_DESKTOP:-gnome-minimal}"
+  if [[ "${DCV_SKIP_DESKTOP:-0}" == "1" || "$DESKTOP_FLAVOR" == "none" ]]; then
+    echo "[DCV] Skipping desktop environment install (DCV_SKIP_DESKTOP=1 or DCV_DESKTOP=none)"
   else
-    echo "[DCV] Installing desktop environment (ubuntu-desktop-minimal) and GDM3... (this can take several minutes)"
-    # Install only if not present
-    if ! dpkg -s ubuntu-desktop-minimal >/dev/null 2>&1; then
-      apt-get install -y ubuntu-desktop-minimal
-    fi
-    if ! dpkg -s gdm3 >/dev/null 2>&1; then
-      apt-get install -y gdm3
-    fi
+    echo "[DCV] Installing desktop: $DESKTOP_FLAVOR (this can take several minutes)"
+    export DEBIAN_FRONTEND=noninteractive
+    case "$DESKTOP_FLAVOR" in
+      cinnamon)
+        # Avoid snaps by not using ubuntu-desktop; install Xorg + LightDM + Cinnamon
+        echo "lightdm shared/default-x-display-manager select lightdm" | debconf-set-selections || true
+        apt-get install -y xorg lightdm cinnamon slick-greeter || true
+        ;;
+      mate)
+        # MATE core to avoid extra apps/snaps; you can add more later
+        echo "lightdm shared/default-x-display-manager select lightdm" | debconf-set-selections || true
+        apt-get install -y xorg lightdm mate-desktop-environment-core mate-terminal || true
+        ;;
+      gnome)
+        # Full GNOME (may pull Firefox snap via ubuntu-desktop)
+        apt-get install -y ubuntu-desktop gdm3 || true
+        ;;
+      gnome-minimal|*)
+        # Default minimal GNOME to keep lean; no Firefox snap
+        apt-get install -y ubuntu-desktop-minimal gdm3 || true
+        ;;
+    esac
   fi
 
   # Disable Wayland for GDM3
-  echo "[DCV] Disabling Wayland in /etc/gdm3/custom.conf..."
-  mkdir -p /etc/gdm3
-  CUSTOM_CONF="/etc/gdm3/custom.conf"
-  if [[ ! -f "$CUSTOM_CONF" ]]; then
-    cat > "$CUSTOM_CONF" <<'CFG'
+  # Only relevant if GDM3 is present
+  if dpkg -s gdm3 >/dev/null 2>&1; then
+    echo "[DCV] Disabling Wayland in /etc/gdm3/custom.conf..."
+    mkdir -p /etc/gdm3
+    CUSTOM_CONF="/etc/gdm3/custom.conf"
+    if [[ ! -f "$CUSTOM_CONF" ]]; then
+      cat > "$CUSTOM_CONF" <<'CFG'
 [daemon]
 WaylandEnable=false
 CFG
-  else
-    # Ensure [daemon] section exists and WaylandEnable=false
-    if ! grep -q '^\[daemon\]' "$CUSTOM_CONF"; then
-      sed -i '1i [daemon]' "$CUSTOM_CONF"
-    fi
-    if grep -q '^WaylandEnable=' "$CUSTOM_CONF"; then
-      sed -i 's/^WaylandEnable=.*/WaylandEnable=false/' "$CUSTOM_CONF"
     else
-      awk '1; /^\[daemon\]$/ && !x {print "WaylandEnable=false"; x=1}' "$CUSTOM_CONF" >"$CUSTOM_CONF.tmp" && mv "$CUSTOM_CONF.tmp" "$CUSTOM_CONF"
+      # Ensure [daemon] section exists and WaylandEnable=false
+      if ! grep -q '^\[daemon\]' "$CUSTOM_CONF"; then
+        sed -i '1i [daemon]' "$CUSTOM_CONF"
+      fi
+      if grep -q '^WaylandEnable=' "$CUSTOM_CONF"; then
+        sed -i 's/^WaylandEnable=.*/WaylandEnable=false/' "$CUSTOM_CONF"
+      else
+        awk '1; /^\[daemon\]$/ && !x {print "WaylandEnable=false"; x=1}' "$CUSTOM_CONF" >"$CUSTOM_CONF.tmp" && mv "$CUSTOM_CONF.tmp" "$CUSTOM_CONF"
+      fi
     fi
   fi
 
-  if [[ "${DCV_SKIP_DESKTOP:-0}" == "1" ]]; then
-    echo "[DCV] Skipping set-default graphical.target due to DCV_SKIP_DESKTOP=1"
+  if [[ "${DCV_SKIP_DESKTOP:-0}" == "1" || "$DESKTOP_FLAVOR" == "none" ]]; then
+    echo "[DCV] Skipping set-default graphical.target due to no desktop install"
   else
     echo "[DCV] Setting default target to graphical.target (start X on boot)"
     sc set-default graphical.target || true
@@ -183,11 +201,15 @@ if [[ -f "$DCV_CONF" ]]; then
   # Leave TLS settings at secure defaults; DCV auto-generates a self-signed cert on first start
 fi
 
-echo "[DCV] Restarting services to apply changes (gdm3 and dcvserver)"
-if [[ "${DCV_SKIP_DESKTOP:-0}" == "1" ]]; then
-  echo "[DCV] Skipping gdm3 restart due to DCV_SKIP_DESKTOP=1"
+echo "[DCV] Restarting services to apply changes (display manager and dcvserver)"
+if [[ "${DCV_SKIP_DESKTOP:-0}" == "1" || "$DESKTOP_FLAVOR" == "none" ]]; then
+  echo "[DCV] Skipping display manager restart due to no desktop install"
 else
-  sc restart gdm3 || true
+  if dpkg -s gdm3 >/dev/null 2>&1; then
+    sc restart gdm3 || true
+  elif dpkg -s lightdm >/dev/null 2>&1; then
+    sc restart lightdm || true
+  fi
 fi
 sc restart dcvserver || true
 
