@@ -32,6 +32,26 @@ scp .\terraform-workstations\ubuntu\setup_dcv.sh ubuntugpuws:/home/ubuntu/setup_
 
 If you have multiple OpenSSH installations (e.g., Git for Windows vs Windows built-in), ensure you’re using the Windows built-in tools in `C:\\Windows\\System32\\OpenSSH\\`.
 
+### Windows: create a passphrase-protected key, add to Pageant, and copy pubkey
+
+Use the helper to generate an Ed25519 key with a passphrase, export a .ppk for Pageant, and optionally copy the public key to your Ubuntu instance:
+
+```
+pwsh -File .\scripts\ssh-key-setup.ps1 -KeyName aws-spot-vms-ed25519 -ExportPpk -CopyToHost ubuntugpuws -ConnectIdentityFile ~/.ssh/aws-spot-vms2.pem
+```
+
+What it does:
+- Creates `~/.ssh/aws-spot-vms-ed25519` and `~/.ssh/aws-spot-vms-ed25519.pub` (prompts for passphrase)
+- Prints SHA256 fingerprint (a human-friendly key ID)
+- If PuTTYgen is available, also creates `~/.ssh/aws-spot-vms-ed25519.ppk`
+- Shows a suggested `Host` block and a Pageant startup command you can paste into a shortcut or Startup task
+- If `-CopyToHost` is provided, appends the public key to `~/.ssh/authorized_keys` on the remote (using the identity you give via `-ConnectIdentityFile` or your working alias)
+
+Notes:
+- You can customize paths to PuTTY tools with `-PuttygenPath` and `-PageantPath`.
+- Pageant uses file paths as startup arguments; use the .ppk path it prints.
+- Alternatively, enable the built-in Windows `ssh-agent` and run `ssh-add` with your new key.
+
 ## NICE DCV on Ubuntu (22.04/24.04) — Install, Configure, and Integrate
 
 This guide explains how this repo installs and configures NICE DCV on Ubuntu GPU workstations built by Terraform. It also documents the sub-script that the post‑boot process calls, verification steps, and how this approach compares with the AWS blog and the official DCV documentation.
