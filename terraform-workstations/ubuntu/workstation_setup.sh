@@ -123,6 +123,43 @@ else
   df -h | grep /fsx || true
 fi
 
+# --- 4b. FSx shared directory and group permissions ---
+if grep -q "/fsx " /proc/mounts; then
+  echo "Configuring group permissions for /fsx/shared..."
+
+  FSX_GROUP="${FSX_GROUP:-fsxusers}"
+  SHARED_DIR="/fsx/shared"
+
+  if ! getent group "$FSX_GROUP" >/dev/null; then
+    groupadd -r "$FSX_GROUP" || true
+  fi
+
+  # Add typical default user if present
+  if id -u ubuntu >/dev/null 2>&1; then
+    usermod -a -G "$FSX_GROUP" ubuntu || true
+  fi
+
+  # Ensure setfacl is available for default ACLs
+  if ! command -v setfacl >/dev/null 2>&1; then
+    apt-get update -y && apt-get install -y acl || true
+  fi
+
+  install -d -m 2775 -g "$FSX_GROUP" "$SHARED_DIR"
+  chown root:"$FSX_GROUP" "$SHARED_DIR" || true
+
+  # Grant rwx to group and set default ACL so new files/dirs inherit group write
+  if command -v setfacl >/dev/null 2>&1; then
+    setfacl -m g:"$FSX_GROUP":rwx "$SHARED_DIR" || true
+    setfacl -d -m g:"$FSX_GROUP":rwx "$SHARED_DIR" || true
+  else
+    echo "WARNING: setfacl not available; default ACLs not set. Group will have rwx on the top-level only." >&2
+  fi
+
+  echo "FSx shared directory ready: $SHARED_DIR (group: $FSX_GROUP, perms: 2775, default ACLs for group)."
+else
+  echo "Skipping /fsx/shared permissioning because FSx is not mounted."
+fi
+
 echo "--- Workstation Setup Complete ---"
 
 # --- 5. NICE DCV Install & Configure ---

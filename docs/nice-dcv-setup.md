@@ -180,6 +180,23 @@ Key Differences / Divergences
 - Web client unreachable: verify SG allows TCP 8443 to this instance; confirm `systemctl status dcvserver` and `ss -tlpn`.
 - Virtual session OpenGL not accelerating: ensure `nice-dcv-gl` installed and NVIDIA GRID driver is correctly installed. You can test with `dcvgltest` if present.
 
+### FSx shared directory permissions
+
+This setup creates a shared directory `/fsx/shared` with a group (default `fsxusers`) so you don’t need sudo to write to the FSx mount:
+
+- Creates group `fsxusers` (override with `FSX_GROUP=yourgroup` in environment)
+- Adds user `ubuntu` to the group
+- Creates `/fsx/shared` with setgid bit (2775) so new files/dirs inherit the group
+- Applies default ACLs so group gets rwx by default
+
+Usage:
+- Log out and back in (or `newgrp fsxusers`) to get the group in your session
+- Write to `/fsx/shared` without sudo:
+  - `touch /fsx/shared/testfile`
+
+To change the group name:
+- Set `FSX_GROUP` before running `workstation_setup.sh` or export it in your environment.
+
 ### Next steps (optional improvements)
 
 - Pin exact DCV package versions and verify checksums for deterministic builds.
