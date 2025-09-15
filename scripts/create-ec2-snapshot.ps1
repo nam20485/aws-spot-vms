@@ -35,4 +35,6 @@ aws ec2 create-tags --region $Region --resources $imageId --tags Key=Name,Value=
 Write-Host "Waiting for AMI to become available (this may take several minutes)..."
 aws ec2 wait image-available --region $Region --image-ids $imageId
 
-Write-Host "AMI ready: $imageId"
+$newImageUrl = "https://$Region.console.aws.amazon.com/ec2/v2/home?region=$Region#ImageDetails:imageId=$imageId"
+Write-Host "AMI Ready: ($imageId) $newImageUrl"
+
