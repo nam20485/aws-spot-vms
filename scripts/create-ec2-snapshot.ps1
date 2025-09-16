@@ -38,3 +38,7 @@ aws ec2 wait image-available --region $Region --image-ids $imageId
 $newImageUrl = "https://$Region.console.aws.amazon.com/ec2/v2/home?region=$Region#ImageDetails:imageId=$imageId"
 Write-Host "AMI Ready: ($imageId) $newImageUrl"
 
+# create git tag with the AMI ID
+git tag -a $imageId -m "AMI created: $amiName"
+git push origin $imageId --tags
+Write-Host "Git tag '$imageId' pushed to origin."

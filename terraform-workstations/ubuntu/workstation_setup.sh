@@ -210,6 +210,15 @@ CFG
   fi
   echo "[DCV] Setting default target to graphical.target (start X on boot)"
   systemctl set-default graphical.target || true
+
+  # Ensure GDM3 is the active display manager (LightDM is not supported by DCV on Ubuntu >= 20.04)
+  if ! dpkg -s gdm3 >/dev/null 2>&1; then
+    apt-get install -y gdm3 || true
+  fi
+  if dpkg -s lightdm >/dev/null 2>&1; then
+    systemctl disable --now lightdm || true
+    systemctl enable gdm3 || true
+  fi
   . /etc/os-release
   VER_ID="${VERSION_ID:-}"
   if [[ -z "${VER_ID}" ]]; then echo "[DCV] Could not determine Ubuntu VERSION_ID" >&2; exit 1; fi
@@ -262,6 +271,19 @@ if [[ -f "$DCV_CONF" ]]; then
   else
     awk '1; /^\[connectivity\]$/ && !x {print "web-port=8443"; x=1}' "$DCV_CONF" >"$DCV_CONF.tmp" && mv "$DCV_CONF.tmp" "$DCV_CONF"
   fi
+fi
+if command -v nvidia-smi >/dev/null 2>&1; then
+  echo "[DCV] Configuring headless NVIDIA Xorg (AllowEmptyInitialConfiguration, UseDisplayDevice=None)"
+  mkdir -p /etc/X11/xorg.conf.d
+  nvidia-xconfig --allow-empty-initial-configuration --use-display-device=None --virtual=1920x1080 || true
+  cat >/etc/X11/xorg.conf.d/10-nvidia-headless.conf <<'EOF'
+Section "Device"
+    Identifier "Nvidia Card"
+    Driver     "nvidia"
+    Option     "AllowEmptyInitialConfiguration" "true"
+    Option     "UseDisplayDevice" "None"
+EndSection
+EOF
 fi
 echo "[DCV] Restarting services to apply changes (gdm3 and dcvserver)"
 systemctl restart gdm3 || true

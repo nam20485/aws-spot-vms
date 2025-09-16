@@ -52,9 +52,8 @@ else
     export DEBIAN_FRONTEND=noninteractive
     case "$DESKTOP_FLAVOR" in
       cinnamon)
-        # Avoid snaps by not using ubuntu-desktop; install Xorg + LightDM + Cinnamon
-        echo "lightdm shared/default-x-display-manager select lightdm" | debconf-set-selections || true
-        apt-get install -y xorg lightdm cinnamon slick-greeter || true
+        # Install Cinnamon but use GDM3 as the display manager (LightDM is not supported by DCV on Ubuntu >= 20.04)
+        apt-get install -y xorg cinnamon gdm3 || true
         ;;
       mate)
         # MATE core to avoid extra apps/snaps; you can add more later
@@ -70,6 +69,17 @@ else
         apt-get install -y ubuntu-desktop-minimal gdm3 || true
         ;;
     esac
+  fi
+
+  # Ensure GDM3 is the active display manager (LightDM unsupported with DCV on Ubuntu >= 20.04)
+  if ! dpkg -s gdm3 >/dev/null 2>&1; then
+    apt-get install -y gdm3 || true
+  fi
+  # Prefer GDM3 over LightDM if LightDM happens to be installed
+  if dpkg -s lightdm >/dev/null 2>&1; then
+    echo "[DCV] Disabling LightDM and enabling GDM3"
+    systemctl disable --now lightdm || true
+    systemctl enable gdm3 || true
   fi
 
   # Disable Wayland for GDM3
@@ -201,6 +211,22 @@ if [[ -f "$DCV_CONF" ]]; then
   # Leave TLS settings at secure defaults; DCV auto-generates a self-signed cert on first start
 fi
 
+# Ensure a headless NVIDIA Xorg screen is available for console sessions
+if command -v nvidia-smi >/dev/null 2>&1; then
+  echo "[DCV] Configuring headless NVIDIA Xorg (AllowEmptyInitialConfiguration, UseDisplayDevice=None)"
+  mkdir -p /etc/X11/xorg.conf.d
+  # Generate a baseline xorg.conf; ignore failures if any
+  nvidia-xconfig --allow-empty-initial-configuration --use-display-device=None --virtual=1920x1080 || true
+  cat >/etc/X11/xorg.conf.d/10-nvidia-headless.conf <<'EOF'
+Section "Device"
+    Identifier "Nvidia Card"
+    Driver     "nvidia"
+    Option     "AllowEmptyInitialConfiguration" "true"
+    Option     "UseDisplayDevice" "None"
+EndSection
+EOF
+fi
+
 echo "[DCV] Restarting services to apply changes (display manager and dcvserver)"
 if [[ "${DCV_SKIP_DESKTOP:-0}" == "1" || "$DESKTOP_FLAVOR" == "none" ]]; then
   echo "[DCV] Skipping display manager restart due to no desktop install"
@@ -208,6 +234,7 @@ else
   if dpkg -s gdm3 >/dev/null 2>&1; then
     sc restart gdm3 || true
   elif dpkg -s lightdm >/dev/null 2>&1; then
+    # LightDM is not supported with DCV on Ubuntu >= 20.04; still restart if it's the only one present
     sc restart lightdm || true
   fi
 fi

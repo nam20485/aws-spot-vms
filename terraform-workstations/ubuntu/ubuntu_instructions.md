@@ -63,3 +63,11 @@ When you are finished, run terraform destroy from the same directory to delete a
 
 See NVIDIA GPU Driver Quick Reference:
 - ./NVIDIA-DRIVER-QUICKREF.md
+## NICE DCV access and firewall
+
+- DCV Viewer connects on TCP 8443 by default. Optional QUIC uses UDP 8443 for better performance.
+- This Terraform now exposes variables to control access:
+  - allowed_dcv_cidrs: CIDR list permitted for DCV (default 0.0.0.0/0)
+  - enable_dcv_udp_quic: true/false to allow UDP 8443 (default true)
+  - allowed_ssh_cidrs: CIDR list for SSH 22 (default 0.0.0.0/0)
+- After apply, use the output dcv_client_url to connect with DCV Viewer.

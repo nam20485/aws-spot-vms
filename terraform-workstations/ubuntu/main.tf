@@ -71,11 +71,34 @@ resource "aws_security_group" "workstation_sg" {
   description = "Controls access to the EC2 Workstation"
   vpc_id      = aws_vpc.main.id
 
+  # SSH access (recommend restricting this in production)
   ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.allowed_ssh_cidrs
+  }
+
+  # NICE DCV access (TCP 8443)
+  ingress {
+    description = "NICE DCV (TCP 8443)"
+    from_port   = 8443
+    to_port     = 8443
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_dcv_cidrs
+  }
+
+  # Optional: NICE DCV QUIC (UDP 8443) for improved performance
+  dynamic "ingress" {
+    for_each = var.enable_dcv_udp_quic ? [1] : []
+    content {
+      description = "NICE DCV QUIC (UDP 8443)"
+      from_port   = 8443
+      to_port     = 8443
+      protocol    = "udp"
+      cidr_blocks = var.allowed_dcv_cidrs
+    }
   }
 
   egress {
@@ -118,11 +141,11 @@ resource "aws_security_group" "fsx_sg" {
 # 3. STORAGE: FSx for Lustre File System
 # -----------------------------------------------------------
 resource "aws_fsx_lustre_file_system" "workstation_fs" {
-  storage_capacity          = 1200
-  subnet_ids                = [aws_subnet.main.id]
-  security_group_ids        = [aws_security_group.fsx_sg.id]
-  deployment_type           = "SCRATCH_2"
-  file_system_type_version  = "2.15"
+  storage_capacity         = 1200
+  subnet_ids               = [aws_subnet.main.id]
+  security_group_ids       = [aws_security_group.fsx_sg.id]
+  deployment_type          = "SCRATCH_2"
+  file_system_type_version = "2.15"
   # per_unit_storage_throughput is not valid for SCRATCH_2 deployments
 
   tags = {
@@ -152,6 +175,9 @@ resource "aws_iam_role" "workstation_role" {
   })
 }
 
+# Region data source for constructing the DCV license bucket ARN dynamically
+data "aws_region" "current" {}
+
 resource "aws_iam_role_policy_attachment" "workstation_ssm_core" {
   role       = aws_iam_role.workstation_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
@@ -161,6 +187,33 @@ resource "aws_iam_role_policy_attachment" "workstation_ssm_core" {
 resource "aws_iam_role_policy_attachment" "workstation_fsx_readonly" {
   role       = aws_iam_role.workstation_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonFSxReadOnlyAccess"
+}
+
+# Allow the instance to fetch DCV license objects from the regional bucket and
+# download NVIDIA drivers from the AWS public driver bucket
+resource "aws_iam_policy" "dcv_and_driver_s3_read" {
+  name        = "ubuntu-workstation-dcv-and-driver-s3-read"
+  description = "Allow EC2 to read DCV license objects and NVIDIA driver artifacts"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:GetObject"
+        ],
+        Resource = [
+          "arn:aws:s3:::dcv-license.${data.aws_region.current.name}/*",
+          "arn:aws:s3:::ec2-linux-nvidia-drivers/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_dcv_and_driver_read" {
+  role       = aws_iam_role.workstation_role.name
+  policy_arn = aws_iam_policy.dcv_and_driver_s3_read.arn
 }
 
 # Find the latest Ubuntu 24.04 LTS AMI (using the robust SSM Parameter method)

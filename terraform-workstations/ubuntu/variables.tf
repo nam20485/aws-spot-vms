@@ -29,3 +29,23 @@ variable "key_name" {
   default = "aws-spot-vms2"
 }
 
+# CIDR blocks allowed to access DCV (TCP 8443 and optional UDP 8443)
+variable "allowed_dcv_cidrs" {
+  description = "List of CIDR blocks allowed to access NICE DCV (port 8443)."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+# CIDR blocks allowed to access SSH
+variable "allowed_ssh_cidrs" {
+  description = "List of CIDR blocks allowed to access SSH (port 22)."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+# Enable UDP QUIC for DCV (UDP 8443)
+variable "enable_dcv_udp_quic" {
+  description = "Whether to allow UDP 8443 for DCV QUIC."
+  type        = bool
+  default     = true
+}

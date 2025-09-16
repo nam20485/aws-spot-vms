@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "terraform-validate-ubuntu",
+			"type": "shell",
+			"command": "pwsh -NoProfile -Command \"terraform -chdir=\\\"e:/src/github/nam20485/aws-spot-vms/terraform-workstations/ubuntu\\\" fmt -recursive; terraform -chdir=\\\"e:/src/github/nam20485/aws-spot-vms/terraform-workstations/ubuntu\\\" validate\""
+		},
+		{
+			"label": "terraform-validate-ubuntu-only",
+			"type": "shell",
+			"command": "pwsh -NoProfile -Command \"terraform -chdir=\\\"e:/src/github/nam20485/aws-spot-vms/terraform-workstations/ubuntu\\\" validate\""
+		}
+	]
+}
