@@ -1,5 +1,6 @@
 ---
-mode: agent
+mode: Remote Cloud WS Expert
+agent: GPT-5-Codex (Preview)
 ---
 
 Tools:
