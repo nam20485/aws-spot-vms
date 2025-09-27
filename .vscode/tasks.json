@@ -10,6 +10,216 @@
 			"label": "terraform-validate-ubuntu-only",
 			"type": "shell",
 			"command": "pwsh -NoProfile -Command \"terraform -chdir=\\\"e:/src/github/nam20485/aws-spot-vms/terraform-workstations/ubuntu\\\" validate\""
+		},
+		{
+			"label": "diag-step1",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"ssh ubuntu-ubuntugpuws \"nvidia-smi || true; lsmod | grep -E '^nvidia' || true; uname -r; apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n '1,80p'; cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo N/A; cat /etc/modprobe.d/nvidia-drm.conf 2>/dev/null || true\""
+			]
+		},
+		{
+			"label": "diag-step1b",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"ssh ubuntu-ubuntugpuws 'nvidia-smi || true; lsmod | grep -E \"^nvidia\" || true; uname -r; apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n \"1,80p\"; cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo N/A; cat /etc/modprobe.d/nvidia-drm.conf 2>/dev/null || true'"
+			]
+		},
+		{
+			"label": "ssh-test",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"ssh ubuntu-ubuntugpuws \"hostname\""
+			]
+		},
+		{
+			"label": "ssh-test2",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ubuntu-ubuntugpuws \"hostname\""
+			]
+		},
+		{
+			"label": "terraform-output-ip",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"terraform -chdir='terraform-workstations/ubuntu' output -raw workstation_public_ip"
+			]
+		},
+		{
+			"label": "terraform-output-ip2",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"terraform -chdir=terraform-workstations/ubuntu output -raw workstation_public_ip"
+			]
+		},
+		{
+			"label": "tf-instance-id",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"terraform -chdir=terraform-workstations/ubuntu output -raw workstation_instance_id"
+			]
+		},
+		{
+			"label": "aws-start-instance",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"aws ec2 start-instances --instance-ids i-07b22f877ffaf84cb --region us-east-1"
+			]
+		},
+		{
+			"label": "aws-sso-login",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"aws sso login"
+			]
+		},
+		{
+			"label": "aws-start-instance2",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"aws ec2 start-instances --instance-ids i-07b22f877ffaf84cb --region us-east-1"
+			]
+		},
+		{
+			"label": "aws-describe-instance",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"aws ec2 describe-instance-status --instance-ids i-07b22f877ffaf84cb --include-all-instances --region us-east-1"
+			]
+		},
+		{
+			"label": "ssh-hostname",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $HOME/.ssh/aws-spot-vms2.pem ubuntu@52.1.238.145 \"hostname\""
+			]
+		},
+		{
+			"label": "diag-step1-ssm",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; $temp = New-TemporaryFile; $commands = @('nvidia-smi || true','lsmod | grep -E \"^nvidia\" || true','uname -r','apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n \"1,80p\"','cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo N/A','cat /etc/modprobe.d/nvidia-drm.conf 2>/dev/null || true'); @{commands=$commands} | ConvertTo-Json | Set-Content -LiteralPath $temp -Encoding UTF8; $fileUri = 'file://' + ($temp.FullName -replace '\\\\','/'); $cmdId = aws ssm send-command --region us-east-1 --instance-ids i-07b22f877ffaf84cb --document-name AWS-RunShellScript --comment diag-step1 --parameters $fileUri --query 'Command.CommandId' --output text; aws ssm wait command-executed --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardOutputContent' --output text; Remove-Item $temp"
+			]
+		},
+		{
+			"label": "diag-step1-ssm2",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; $cmdId = aws ssm send-command --region us-east-1 --instance-ids i-07b22f877ffaf84cb --document-name AWS-RunShellScript --comment diag-step1 --parameters commands=\"nvidia-smi || true\",\"lsmod | grep -E '\"\"^nvidia\"\"' || true\",\"uname -r\",\"apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n '\"\"1,80p\"\"'\",\"cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo N/A\",\"cat /etc/modprobe.d/nvidia-drm.conf 2>/dev/null || true\" --query 'Command.CommandId' --output text; aws ssm wait command-executed --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardOutputContent' --output text"
+			]
+		},
+		{
+			"label": "ssm-send1",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; aws ssm send-command --region us-east-1 --instance-ids i-07b22f877ffaf84cb --document-name AWS-RunShellScript --comment diag-step1 --parameters 'commands=[\"nvidia-smi || true\",\"lsmod | grep -E ''^nvidia'' || true\",\"uname -r\",\"apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n ''1,80p''\",\"cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo N/A\",\"cat /etc/modprobe.d/nvidia-drm.conf 2>/dev/null || true\"]' --query 'Command.CommandId' --output text"
+			]
+		},
+		{
+			"label": "ssm-send1b",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; $cmdId = aws ssm send-command --region us-east-1 --instance-ids i-07b22f877ffaf84cb --document-name AWS-RunShellScript --comment diag-step1 --parameters @{commands=@('nvidia-smi || true','lsmod | grep -E \"^nvidia\" || true','uname -r','apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n ''1,80p''','cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo N/A','cat /etc/modprobe.d/nvidia-drm.conf 2>/dev/null || true')} --query 'Command.CommandId' --output text; aws ssm wait command-executed --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardOutputContent' --output text"
+			]
+		},
+		{
+			"label": "ssm-send-json",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; $params = '{\"commands\":[\"nvidia-smi || true\",\"lsmod | grep -E ^nvidia || true\",\"uname -r\",\"apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n 1,80p\",\"cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo N/A\",\"cat /etc/modprobe.d/nvidia-drm.conf 2>/dev/null || true\"]}'; $file = New-TemporaryFile; Set-Content -LiteralPath $file -Value $params -Encoding UTF8; $cmdId = aws ssm send-command --region us-east-1 --instance-ids i-07b22f877ffaf84cb --document-name AWS-RunShellScript --comment diag-step1 --parameters file://$($file.FullName) --query 'Command.CommandId' --output text; aws ssm wait command-executed --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardOutputContent' --output text; Remove-Item $file"
+			]
+		},
+		{
+			"label": "ssm-collect1",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; $temp = New-TemporaryFile; $payload = [ordered]@{DocumentName='AWS-RunShellScript';Comment='diag-step1';InstanceIds=@('i-07b22f877ffaf84cb');Parameters=@{commands=@('nvidia-smi || true','lsmod | grep -E \"^nvidia\" || true','uname -r','apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n \"1,80p\"','cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo N/A','cat /etc/modprobe.d/nvidia-drm.conf 2>/dev/null || true')}} | ConvertTo-Json -Depth 4; Set-Content -LiteralPath $temp -Value $payload -Encoding UTF8; $cmdId = aws ssm send-command --region us-east-1 --cli-input-json file://$($temp.FullName) --query 'Command.CommandId' --output text; aws ssm wait command-executed --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardOutputContent' --output text; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardErrorContent' --output text; Remove-Item $temp"
+			]
+		},
+		{
+			"label": "ssm-collect1",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; $temp = New-TemporaryFile; $commands = @('nvidia-smi || true','lsmod | grep -E ''^nvidia'' || true','uname -r','apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n ''1,80p''','if [ -f /sys/module/nvidia_drm/parameters/modeset ]; then cat /sys/module/nvidia_drm/parameters/modeset; else echo N/A; fi','if [ -f /etc/modprobe.d/nvidia-drm.conf ]; then cat /etc/modprobe.d/nvidia-drm.conf; fi'); $payload = [ordered]@{DocumentName='AWS-RunShellScript';Comment='diag-step1';InstanceIds=@('i-07b22f877ffaf84cb');Parameters=@{commands=$commands}} | ConvertTo-Json -Depth 4; Set-Content -LiteralPath $temp -Value $payload -Encoding UTF8; $cmdId = aws ssm send-command --region us-east-1 --cli-input-json file://$($temp.FullName) --query 'Command.CommandId' --output text; aws ssm wait command-executed --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardOutputContent' --output text; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardErrorContent' --output text; Remove-Item $temp"
+			]
+		},
+		{
+			"label": "ssm-collect-first",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; $temp = New-TemporaryFile; $json = @'\n{\n  \"DocumentName\": \"AWS-RunShellScript\",\n  \"Comment\": \"diag-step1\",\n  \"InstanceIds\": [\"i-07b22f877ffaf84cb\"],\n  \"Parameters\": {\n    \"commands\": [\n      \"nvidia-smi || true\",\n      \"lsmod | grep -E '^nvidia' || true\",\n      \"uname -r\",\n      \"apt policy nvidia-driver-570-server nvidia-utils-570-server | sed -n '1,80p'\",\n      \"if [ -f /sys/module/nvidia_drm/parameters/modeset ]; then cat /sys/module/nvidia_drm/parameters/modeset; else echo N/A; fi\",\n      \"if [ -f /etc/modprobe.d/nvidia-drm.conf ]; then cat /etc/modprobe.d/nvidia-drm.conf; fi\"\n    ]\n  }\n}\n'@; Set-Content -LiteralPath $temp -Value $json -Encoding UTF8; $cmdId = aws ssm send-command --region us-east-1 --cli-input-json file://$($temp.FullName) --query 'Command.CommandId' --output text; aws ssm wait command-executed --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardOutputContent' --output text; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardErrorContent' --output text; Remove-Item $temp"
+			]
+		},
+		{
+			"label": "ssm-send1",
+			"type": "shell",
+			"command": "pwsh",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$ErrorActionPreference='Stop'; $env:AWS_PAGER=''; $cmdId = aws ssm send-command --region us-east-1 --cli-input-json file://tmp/diag-step1.json --query 'Command.CommandId' --output text; aws ssm wait command-executed --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardOutputContent' --output text; aws ssm get-command-invocation --region us-east-1 --command-id $cmdId --instance-id i-07b22f877ffaf84cb --query 'StandardErrorContent' --output text"
+			]
 		}
 	]
 }

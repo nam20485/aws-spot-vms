@@ -86,8 +86,8 @@ function Test-AWSAuth {
 function Get-InstanceSelection {
     Write-Host "Fetching your EC2 instances..." -ForegroundColor Cyan
     
-    # Get instances with useful information - use simpler query to avoid PowerShell quote issues
-    $instancesJson = aws ec2 describe-instances --output json 2>&1
+    # Get instances with useful information - filter out terminated instances
+    $instancesJson = aws ec2 describe-instances --filters "Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped,rebooting" --output json 2>&1
     
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to fetch instances: $instancesJson"
@@ -101,6 +101,11 @@ function Get-InstanceSelection {
         $instances = @()
         foreach ($reservation in $ec2Data.Reservations) {
             foreach ($instance in $reservation.Instances) {
+                # Skip terminated instances
+                if ($instance.State.Name -eq "terminated") {
+                    continue
+                }
+                
                 # Find the Name tag
                 $nameTag = $instance.Tags | Where-Object { $_.Key -eq "Name" } | Select-Object -First 1
                 $name = if ($nameTag) { $nameTag.Value } else { $null }
@@ -121,7 +126,11 @@ function Get-InstanceSelection {
     }
     
     if (-not $instances -or $instances.Count -eq 0) {
-        Write-Warning "No EC2 instances found in your account"
+        Write-Warning "No EC2 instances found in your account (excluding terminated instances)"
+        Write-Host "This could mean:" -ForegroundColor Yellow
+        Write-Host "  - All instances are terminated" -ForegroundColor Yellow
+        Write-Host "  - Instances are in a different region" -ForegroundColor Yellow
+        Write-Host "  - AWS credentials don't have EC2 permissions" -ForegroundColor Yellow
         return $null
     }
     
@@ -147,7 +156,10 @@ function Get-InstanceSelection {
             "running" { "Green" }
             "stopped" { "Yellow" }
             "stopping" { "Red" }
+            "pending" { "Cyan" }
             "starting" { "Cyan" }
+            "rebooting" { "Magenta" }
+            "shutting-down" { "DarkRed" }
             "terminated" { "DarkGray" }
             default { "White" }
         }
@@ -288,9 +300,34 @@ if (-not $currentState) {
 
 Write-Host "Current state: $currentState" -ForegroundColor Yellow
 
+# Handle different EC2 instance states:
+# - running: Instance is up and ready
+# - stopped: Instance is shut down and can be started
+# - pending: Instance is starting up (transitional state)
+# - stopping: Instance is shutting down (transitional state)
+# - rebooting: Instance is restarting (transitional state)
+# - shutting-down: Instance is being terminated (transitional state)
+# - terminated: Instance has been destroyed
+
 # Start instance if not already running
 if ($currentState -eq "running") {
     Write-Host "Instance is already running!" -ForegroundColor Green
+} elseif ($currentState -eq "pending") {
+    Write-Host "Instance is already starting up (state: pending)..." -ForegroundColor Cyan
+    
+    if ($WaitForRunning) {
+        Write-Host "Waiting for instance to reach 'running' state..." -ForegroundColor Cyan
+        
+        aws ec2 wait instance-running --instance-ids $targetInstanceId
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Instance is now running!" -ForegroundColor Green
+        } else {
+            Write-Warning "Wait command failed, but instance may still be starting"
+        }
+    } else {
+        Write-Host "Instance is starting. Use -WaitForRunning to wait for completion." -ForegroundColor Yellow
+    }
 } elseif ($currentState -eq "stopped") {
     Write-Host "Starting instance..." -ForegroundColor Cyan
     
@@ -324,9 +361,30 @@ if ($currentState -eq "running") {
             Write-Warning "Wait command failed, but instance may still be starting"
         }
     }
+} elseif ($currentState -eq "stopping") {
+    Write-Warning "Instance is currently stopping. Please wait for it to reach 'stopped' state before starting."
+    Write-Host "Current state: $currentState" -ForegroundColor Yellow
+    exit 1
+} elseif ($currentState -eq "rebooting") {
+    Write-Host "Instance is rebooting and will be running shortly..." -ForegroundColor Cyan
+    
+    if ($WaitForRunning) {
+        Write-Host "Waiting for instance to reach 'running' state..." -ForegroundColor Cyan
+        
+        aws ec2 wait instance-running --instance-ids $targetInstanceId
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Instance is now running!" -ForegroundColor Green
+        } else {
+            Write-Warning "Wait command failed, but instance may still be rebooting"
+        }
+    } else {
+        Write-Host "Instance is rebooting. Use -WaitForRunning to wait for completion." -ForegroundColor Yellow
+    }
 } else {
     Write-Warning "Instance is in state '$currentState'. Cannot start from this state."
     Write-Host "Valid states for starting: stopped" -ForegroundColor Yellow
+    Write-Host "States that indicate startup in progress: pending, rebooting" -ForegroundColor Yellow
     exit 1
 }
 
